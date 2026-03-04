@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstdint>
+#include <string>
 #include <variant>
 
 #define PAGE_SIZE 4096
 
-using Literal = std::variant<std::monostate, double, std::string>;
+using Literal = std::variant<std::monostate, double, std::string, bool>;
 using Byte = char;
