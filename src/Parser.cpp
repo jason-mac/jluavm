@@ -1,5 +1,6 @@
 #include "Parser.hpp"
 #include "expressions/BinaryExpr.hpp"
+#include "expressions/CallExpr.hpp"
 #include "expressions/LiteralExpr.hpp"
 #include "expressions/NameExpr.hpp"
 #include "expressions/UnaryExpr.hpp"
@@ -12,6 +13,7 @@
 #include "statements/WhileStmt.hpp"
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <variant>
 
 void Parser::sync() {
@@ -194,7 +196,7 @@ std::unique_ptr<Expr> Parser::unary() {
     std::unique_ptr<Expr> right = unary();
     return std::make_unique<UnaryExpr>(oper, std::move(right));
   }
-  return primary();
+  return call();
 }
 
 std::unique_ptr<Expr> Parser::primary() {
@@ -216,11 +218,13 @@ std::unique_ptr<Expr> Parser::primary() {
   if (match(TokenType::IDENTIFIER)) {
     return std::make_unique<NameExpr>(previous());
   }
+
   if (match(TokenType::LEFT_PAREN)) {
     std::unique_ptr<Expr> expr = expression();
     consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
     return expr;
   }
+
   throw ParseError("Expected expression.", peek().line);
 }
 
@@ -300,4 +304,35 @@ std::vector<std::unique_ptr<Stmt>> Parser::block() {
     stmts.push_back(declaration());
   }
   return stmts;
+}
+
+std::unique_ptr<Expr> Parser::call() {
+  std::unique_ptr<Expr> expr = primary();
+  for (;;) {
+    if (match(TokenType::LEFT_PAREN)) {
+      expr = finishCall(std::move(expr));
+    } else if (match(TokenType::DOT)) {
+      Token name =
+          consume(TokenType::IDENTIFIER, "Exprect propery name after '.'");
+      // todo implement later
+    } else {
+      break;
+    }
+  }
+  return expr;
+}
+
+std::unique_ptr<Expr> Parser::finishCall(std::unique_ptr<Expr> callee) {
+  std::vector<std::unique_ptr<Expr>> args;
+  if (!check(TokenType::RIGHT_PAREN)) {
+    do {
+      if (args.size() >= 255) {
+        throw std::runtime_error("Can't have more than 255 args");
+      }
+      args.push_back(expression());
+    } while (match(TokenType::COMMA));
+  }
+  Token paren = consume(TokenType::RIGHT_PAREN, "Expect ')' after arugments");
+  return std::make_unique<CallExpr>(std::move(callee), std::move(paren),
+                                    std::move(args));
 }

@@ -1,6 +1,7 @@
 #include "Lexer.hpp"
 #include "Parser.hpp"
 #include "expressions/BinaryExpr.hpp"
+#include "expressions/CallExpr.hpp"
 #include "expressions/LiteralExpr.hpp"
 #include "expressions/NameExpr.hpp"
 #include "expressions/UnaryExpr.hpp"
@@ -38,6 +39,12 @@ static void printExpr(const Expr *expr, int indent) {
     } else if (auto *e = dynamic_cast<const UnaryExpr *>(expr)) {
         std::cout << pad << "UnaryExpr(" << e->operator_.lexeme << ")\n";
         printExpr(e->rightOperand.get(), indent + 1);
+    } else if (auto *e = dynamic_cast<const CallExpr *>(expr)) {
+        std::cout << pad << "CallExpr\n";
+        printExpr(e->callee.get(), indent + 1);
+        for (const auto &arg : e->arguments) {
+            printExpr(arg.get(), indent + 1);
+        }
     } else {
         std::cout << pad << "UnknownExpr\n";
     }
