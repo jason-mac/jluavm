@@ -7,10 +7,10 @@
 #include <unordered_map>
 #include <vector>
 
-class Lexer {
+class Lexer
+{
 public:
-  Lexer(const std::string &source) : source(source) {}
-
+  Lexer(const std::string& source) : source(source) {}
   std::vector<Token> scanTokens();
 
 private:
@@ -23,8 +23,8 @@ private:
 
   static const std::unordered_map<std::string, TokenType> keywords;
 
-  bool isAtEnd();
   void scanToken();
+  bool isAtEnd();
 
   void addIdentifier();
   void addNumber();
