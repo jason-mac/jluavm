@@ -6,15 +6,414 @@
 #include "expressions/UnaryExpr.hpp"
 #include "statements/AssignStmt.hpp"
 #include "statements/BlockStmt.hpp"
+#include "statements/BreakStmt.hpp"
+#include "statements/DoStmt.hpp"
 #include "statements/ExpressionStmt.hpp"
 #include "statements/IfStmt.hpp"
 #include "statements/LocalStmt.hpp"
+#include "statements/RepeatStmt.hpp"
 #include "statements/ReturnStmt.hpp"
 #include "statements/WhileStmt.hpp"
+#include "tokens/TokenType.hpp"
+
+#include <initializer_list>
 #include <iostream>
 #include <memory>
-#include <stdexcept>
 #include <variant>
+
+static bool isBlockCloser(TokenType type)
+{
+  return type == TokenType::END || type == TokenType::ELSE || type == TokenType::ELSEIF ||
+         type == TokenType::UNTIL;
+}
+
+std::vector<std::unique_ptr<Stmt>> Parser::parse()
+{
+  std::vector<std::unique_ptr<Stmt>> statements;
+  while (!done())
+  {
+    try
+    {
+      statements.push_back(statement());
+    }
+    catch (ParseError& error)
+    {
+      std::cerr << "ParseError: " << error.what() << " at line " << error.line << "\n";
+      sync();
+    }
+  }
+  return statements;
+}
+
+std::unique_ptr<Stmt> Parser::statement()
+{
+  // stat ::= varlist `=` explist | functioncall | do block end | while exp do block end | repeat
+  // block until exp | if exp then block end | for | function | local
+  if (match(TokenType::LOCAL)) return localStatement();
+  if (match(TokenType::WHILE)) return whileStatement();
+  if (match(TokenType::REPEAT)) return repeatStatement();
+  if (match(TokenType::DO)) return doStatement();
+  if (match(TokenType::IF)) return ifStatement();
+
+  if (match(TokenType::FOR)) return forStatement();
+  if (match(TokenType::FUNCTION)) return functionStatement();
+
+  return expressionStatement();
+}
+
+std::unique_ptr<Stmt> Parser::forStatement()
+{
+  // stat ::= for Name `=` exp `,` exp [`,` exp] do block end | for namelist in explist do block end
+  return nullptr;
+}
+
+std::unique_ptr<Stmt> Parser::functionStatement()
+{
+  // stat ::= function funcname funcbody
+  return nullptr;
+}
+
+std::unique_ptr<Stmt> Parser::returnStatement()
+{
+  // laststat ::= return [explist]
+  Token keyword = previous();
+  std::unique_ptr<Expr> value = nullptr;
+  if (!done() && !isBlockCloser(peek().type))
+  {
+    value = expression();
+  }
+  // TODO: ADD SUPPORT FOR MULTIPLE RETURN VALUES
+  return std::make_unique<ReturnStmt>(keyword, std::move(value));
+}
+
+std::unique_ptr<Stmt> Parser::breakStatement()
+{
+  return std::make_unique<BreakStmt>(previous());
+}
+
+std::unique_ptr<Stmt> Parser::expressionStatement()
+{
+  // stat ::= varlist `=` explist | functioncall
+  std::unique_ptr<Expr> expr = expression();
+  if (match(TokenType::EQUAL))
+  {
+    auto* name = dynamic_cast<NameExpr*>(expr.get());
+    if (!name) throw ParseError("Invalid assignment target.", peek().line);
+    std::unique_ptr<Expr> value = expression();
+    return std::make_unique<AssignStmt>(name->name, std::move(value));
+  }
+  return std::make_unique<ExpressionStmt>(std::move(expr));
+}
+
+std::unique_ptr<Stmt> Parser::blockStatement()
+{
+  // block ::= chunk
+  // chunk ::= {stat [`;`]} [laststat [`;`]]
+  std::vector<std::unique_ptr<Stmt>> statements;
+  while (!done() && !isBlockCloser(peek().type))
+  {
+    statements.push_back(statement());
+  }
+
+  if (match(TokenType::RETURN)) statements.push_back(returnStatement());
+  else if (match(TokenType::BREAK)) statements.push_back(breakStatement());
+
+  if (done()) throw ParseError("Expected 'end' to close block", peek().line);
+  return std::make_unique<BlockStmt>(std::move(statements));
+}
+
+std::unique_ptr<Stmt> Parser::localStatement()
+{
+  Token name = consume(TokenType::IDENTIFIER, "Expected variable name after 'local'");
+  std::unique_ptr<Expr> value = nullptr;
+  if (match(TokenType::EQUAL)) value = expression();
+  return std::make_unique<LocalStmt>(std::move(name), std::move(value));
+}
+
+std::unique_ptr<Stmt> Parser::whileStatement()
+{
+  // stat ::= while exp do block end
+  std::unique_ptr<Expr> condition = expression();
+  consume(TokenType::DO, "Expected 'do' after condition");
+  std::unique_ptr<Stmt> block = blockStatement();
+  consume(TokenType::END, "Expected 'end' after block");
+  return std::make_unique<WhileStmt>(std::move(condition), std::move(block));
+}
+
+std::unique_ptr<Stmt> Parser::repeatStatement()
+{
+  // stat ::= repeat block until exp
+  std::unique_ptr<Stmt> body = blockStatement();
+  consume(TokenType::UNTIL, "Expected 'until' after block");
+  std::unique_ptr<Expr> condition = expression();
+  return std::make_unique<RepeatStmt>(std::move(body), std::move(condition));
+}
+
+std::unique_ptr<Stmt> Parser::elseIfStatement()
+{
+  // {elseif exp then block}
+  std::unique_ptr<Expr> condition = expression();
+  consume(TokenType::THEN, "Expected 'then' after expression");
+  std::unique_ptr<Stmt> block = blockStatement();
+  return std::make_unique<IfStmt>(std::move(condition), std::move(block), nullptr);
+}
+
+std::unique_ptr<Stmt> Parser::ifStatement()
+{
+  // stat ::= if exp then block {elseif exp then block} [else block] end
+  std::unique_ptr<Expr> condition = expression();
+  consume(TokenType::THEN, "Expected 'then' after expression");
+  std::unique_ptr<Stmt> block = blockStatement();
+
+  std::unique_ptr<Stmt> ifStmt =
+      std::make_unique<IfStmt>(std::move(condition), std::move(block), nullptr);
+  IfStmt* cur = (IfStmt*)ifStmt.get();
+
+  while (match(TokenType::ELSEIF))
+  {
+    std::unique_ptr<Stmt> elseIf = elseIfStatement();
+    IfStmt* next = (IfStmt*)elseIf.get(); // get pointer BEFORE move
+    cur->elseBranch = std::move(elseIf);
+    cur = next;
+  }
+
+  if (match(TokenType::ELSE))
+  {
+    cur->elseBranch = blockStatement();
+  }
+
+  consume(TokenType::END, "Expected 'end' after if statement");
+  return ifStmt;
+}
+
+std::unique_ptr<Stmt> Parser::doStatement()
+{
+  std::unique_ptr<Stmt> block = blockStatement();
+  consume(TokenType::END, "Expected 'end' after block");
+  return std::make_unique<DoStmt>(std::move(block));
+}
+
+std::unique_ptr<Expr> Parser::expression()
+{
+  // exp  ::= (nil | false | true | Number | String | `...` | function | prefixexp |
+  //           tableconstructor | unop exp) exp'
+
+  // exp' ::= binop exp exp' | ε
+
+  // ε ::= nothing
+
+  // exp ::= (nil | false | true | Number | String)
+  return orExpression();
+}
+
+std::unique_ptr<Expr> Parser::expressionTemplate(std::initializer_list<TokenType> tokenTypes,
+                                                 std::function<std::unique_ptr<Expr>()> expr)
+{
+  std::unique_ptr<Expr> left = expr();
+  while (match(tokenTypes))
+  {
+    Token op = previous();
+    std::unique_ptr<Expr> right = expr();
+    left = std::make_unique<BinaryExpr>(std::move(left), op, std::move(right));
+  }
+  return left;
+}
+
+std::unique_ptr<Expr> Parser::expressionTemplate(std::initializer_list<TokenType> tokenTypes,
+                                                 std::function<std::unique_ptr<Expr>()> base,
+                                                 std::function<std::unique_ptr<Expr>()> self)
+{
+  std::unique_ptr<Expr> left = base();
+  if (match(tokenTypes))
+  {
+    Token op = previous();
+    std::unique_ptr<Expr> right = self();
+    return std::make_unique<BinaryExpr>(std::move(left), op, std::move(right));
+  }
+  return left;
+}
+
+std::unique_ptr<Expr> Parser::orExpression()
+{
+  return expressionTemplate({TokenType::OR}, [this]() { return andExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::andExpression()
+{
+  return expressionTemplate({TokenType::AND}, [this]() { return comparisonExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::comparisonExpression()
+{
+  return expressionTemplate({TokenType::LESS,
+                             TokenType::GREATER,
+                             TokenType::LESS_EQUAL,
+                             TokenType::GREATER_EQUAL,
+                             TokenType::EQUAL_EQUAL,
+                             TokenType::TILDE_EQUAL},
+                            [this]() { return concatExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::concatExpression()
+{
+  return expressionTemplate(
+      {TokenType::DOT_DOT},
+      [this]() { return termExpression(); },
+      [this]() { return concatExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::termExpression()
+{
+  return expressionTemplate({TokenType::PLUS, TokenType::MINUS},
+                            [this]() { return factorExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::factorExpression()
+{
+  return expressionTemplate({TokenType::STAR, TokenType::SLASH, TokenType::PERCENT},
+                            [this]() { return unaryExpression(); });
+}
+
+std::unique_ptr<Expr> Parser::powerExpression()
+{
+  return expressionTemplate(
+      {TokenType::CARET},
+      [this]() { return baseExpression(); },
+      [this]() { return powerExpression(); });
+}
+
+// base ::= nil | false | true | Number | String | `...` | function | prefixexp | tableconstructor |
+// unop exp
+std::unique_ptr<Expr> Parser::baseExpression()
+{
+  std::unique_ptr<Expr> to_return;
+  // exp ::= (nil | false | true | Number | String)
+  to_return = literalExpression();
+  if (to_return != nullptr) return to_return;
+
+  // exp ::= (prefixexp)
+  to_return = prefixExpression();
+  if (to_return != nullptr) return to_return;
+
+  // maybe throw here, should cover everything in base
+  throw ParseError("Expected expression.", peek().line);
+}
+
+std::unique_ptr<Expr> Parser::literalExpression()
+{
+  // nil | false | true | Number | String
+  if (match(TokenType::NUMBER)) return std::make_unique<LiteralExpr>(previous().literal);
+  if (match(TokenType::STRING)) return std::make_unique<LiteralExpr>(previous().literal);
+  if (match(TokenType::NIL)) return std::make_unique<LiteralExpr>(std::monostate{});
+  if (match(TokenType::TRUE)) return std::make_unique<LiteralExpr>(true);
+  if (match(TokenType::FALSE)) return std::make_unique<LiteralExpr>(false);
+  return nullptr;
+}
+
+std::unique_ptr<Expr> Parser::unaryExpression()
+{
+  // unop exp ::= `-` | not | `#`
+  if (match(TokenType::MINUS, TokenType::NOT, TokenType::HASH))
+  {
+    Token op = previous();
+    std::unique_ptr<Expr> right = powerExpression();
+    return std::make_unique<UnaryExpr>(op, std::move(right));
+  }
+  return powerExpression();
+}
+
+inline std::unique_ptr<Expr> Parser::varExpression()
+{
+  return prefixExpression();
+}
+
+std::unique_ptr<Expr> Parser::prefixExpression()
+{
+  // prefixexp ::= var | functioncall | `(` exp `)`
+  // var ::= Name | prefixexp `[` exp `]` | prefixexp `.` Name
+
+  std::unique_ptr<Expr> expr;
+
+  if (match(TokenType::IDENTIFIER))
+  {
+    expr = std::make_unique<NameExpr>(previous());
+  }
+  else if (match(TokenType::LEFT_PAREN))
+  {
+    expr = expression();
+    consume(TokenType::RIGHT_PAREN, "Expected ')' after expression");
+  }
+  else return nullptr;
+
+  for (;;)
+  {
+    if (match(TokenType::LEFT_PAREN)) // functioncall
+    {
+      // args ::= `(` [explist] `)`
+      std::vector<std::unique_ptr<Expr>> args;
+      if (!check(TokenType::RIGHT_PAREN))
+      {
+        do
+        {
+          args.push_back(expression());
+        } while (match(TokenType::COMMA));
+      }
+      Token paren = consume(TokenType::RIGHT_PAREN, "Expected ')' after arguments");
+      expr = std::make_unique<CallExpr>(std::move(expr), paren, std::move(args));
+    }
+    else if (match(TokenType::LEFT_BRACKET)) // t[exp]
+    {
+    }
+    else if (match(TokenType::DOT)) // t.name
+    {
+    }
+    else break;
+  }
+  return expr;
+}
+
+Token Parser::previous() const
+{
+  return this->tokens[current - 1];
+}
+
+Token Parser::advance()
+{
+  if (!done()) current++;
+  return previous();
+}
+
+bool Parser::check(TokenType type)
+{
+  return done() ? false : peek().type == type;
+}
+
+Token Parser::consume(TokenType type, std::string message)
+{
+  if (!check(type)) throw ParseError(message, peek().line);
+  return advance();
+}
+
+Token Parser::peek()
+{
+  return tokens[current];
+}
+
+bool Parser::done()
+{
+  return peek().type == TokenType::EOF_LUA;
+}
+
+bool Parser::match(std::initializer_list<TokenType> types)
+{
+  for (TokenType type : types)
+  {
+    if (!check(type)) continue;
+    advance();
+    return true;
+  }
+  return false;
+}
 
 void Parser::sync()
 {
@@ -40,328 +439,4 @@ void Parser::sync()
     }
     advance();
   }
-}
-
-std::vector<std::unique_ptr<Stmt>> Parser::parse()
-{
-  std::vector<std::unique_ptr<Stmt>> statements;
-  while (!done()) statements.push_back(declaration());
-  return statements;
-}
-
-std::unique_ptr<Stmt> Parser::declaration()
-{
-  try
-  {
-    if (match(TokenType::LOCAL))
-    {
-      return localDeclaration();
-    }
-    return statement();
-  }
-  catch (ParseError& error)
-  {
-    std::cerr << "ParseError: " << error.what() << " at line " << error.line << "\n";
-    sync();
-  }
-  return nullptr;
-}
-
-Token Parser::previous() const
-{
-  return this->tokens[current - 1];
-}
-
-Token Parser::advance()
-{
-  if (!done()) current++;
-  return previous();
-}
-
-bool Parser::check(TokenType type)
-{
-  return done() ? false : peek().type == type;
-}
-
-std::unique_ptr<Stmt> Parser::statement()
-{
-  if (match(TokenType::IF)) return ifStatement();
-  if (match(TokenType::FOR)) return forStatement();
-  if (match(TokenType::RETURN)) return returnStatement();
-  if (match(TokenType::WHILE)) return whileStatement();
-  return expressionStatement();
-}
-
-std::unique_ptr<Stmt> Parser::returnStatement()
-{
-  Token keyword = previous();
-  std::unique_ptr<Expr> value = nullptr;
-  if (!done() && !check(TokenType::END) && !check(TokenType::ELSE) && !check(TokenType::ELSEIF))
-  {
-    value = expression();
-  }
-  return std::make_unique<ReturnStmt>(std::move(keyword), std::move(value));
-}
-
-std::unique_ptr<Stmt> Parser::forStatement()
-{
-  // pass
-  return nullptr;
-}
-
-std::unique_ptr<IfStmt> Parser::nextIfStmt()
-{
-  std::unique_ptr<Expr> condition = expression();
-  consume(TokenType::THEN, "Expect 'then' after condition.");
-  std::unique_ptr<Stmt> thenBranch = std::make_unique<BlockStmt>(block());
-  return std::make_unique<IfStmt>(std::move(condition), std::move(thenBranch), nullptr);
-}
-
-std::unique_ptr<Stmt> Parser::ifStatement()
-{
-  std::unique_ptr<IfStmt> to_return = nextIfStmt();
-  IfStmt* currentIfStmt = to_return.get();
-
-  while (match(TokenType::ELSEIF))
-  {
-    std::unique_ptr<IfStmt> nextIf = nextIfStmt();
-    currentIfStmt->elseBranch = std::move(nextIf);
-    currentIfStmt = nextIf.get();
-  }
-
-  if (match(TokenType::ELSE))
-  {
-    currentIfStmt->elseBranch = std::make_unique<BlockStmt>(block());
-  }
-
-  consume(TokenType::END, "Expect 'end' after if block.");
-  return to_return;
-}
-
-std::unique_ptr<Stmt> Parser::whileStatement()
-{
-  std::unique_ptr<Expr> condition = expression();
-  consume(TokenType::DO, "Expect 'do' after condition");
-  std::unique_ptr<BlockStmt> body = std::make_unique<BlockStmt>(block());
-  consume(TokenType::END, "Exppect 'end' after body");
-  return std::make_unique<WhileStmt>(std::move(condition), std::move(body));
-}
-
-std::unique_ptr<Stmt> Parser::expressionStatement()
-{
-  std::unique_ptr<Expr> expr = expression();
-  if (match(TokenType::EQUAL))
-  {
-    std::unique_ptr<Expr> value = expression();
-    auto* name = dynamic_cast<NameExpr*>(expr.get());
-    if (!name)
-    {
-      throw ParseError("Invalid assignment target.", peek().line);
-    }
-    return std::make_unique<AssignStmt>(name->name, std::move(value));
-  }
-  return std::make_unique<ExpressionStmt>(std::move(expr));
-}
-
-std::unique_ptr<Stmt> Parser::localDeclaration()
-{
-  Token name = consume(TokenType::IDENTIFIER, "Expect variable name.");
-  std::unique_ptr<Expr> initializer = nullptr;
-  if (match(TokenType::EQUAL))
-  {
-    initializer = expression();
-  }
-  return std::make_unique<LocalStmt>(name, std::move(initializer));
-}
-
-std::unique_ptr<Expr> Parser::expression()
-{
-  return or_();
-}
-
-Token Parser::consume(TokenType type, std::string message)
-{
-  if (!check(type)) throw ParseError(message, peek().line);
-  return advance();
-}
-
-bool Parser::match(std::initializer_list<TokenType> types)
-{
-  for (TokenType type : types)
-  {
-    if (!check(type)) continue;
-    advance();
-    return true;
-  }
-  return false;
-}
-
-bool Parser::match(TokenType type)
-{
-  return match({type});
-}
-
-Token Parser::peek()
-{
-  return tokens[current];
-}
-
-bool Parser::done()
-{
-  return peek().type == TokenType::EOF_LUA;
-}
-
-std::unique_ptr<Expr> Parser::unary()
-{
-  if (match(TokenType::NOT, TokenType::MINUS, TokenType::HASH))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = unary();
-    return std::make_unique<UnaryExpr>(oper, std::move(right));
-  }
-  return call();
-}
-
-std::unique_ptr<Expr> Parser::primary()
-{
-  if (match(TokenType::NUMBER)) return std::make_unique<LiteralExpr>(previous().literal);
-  if (match(TokenType::STRING)) return std::make_unique<LiteralExpr>(previous().literal);
-  if (match(TokenType::TRUE)) return std::make_unique<LiteralExpr>(true);
-  if (match(TokenType::FALSE)) return std::make_unique<LiteralExpr>(false);
-  if (match(TokenType::NIL)) return std::make_unique<LiteralExpr>(std::monostate{});
-  if (match(TokenType::IDENTIFIER)) return std::make_unique<NameExpr>(previous());
-  if (match(TokenType::LEFT_PAREN))
-  {
-    std::unique_ptr<Expr> expr = expression();
-    consume(TokenType::RIGHT_PAREN, "Expect ')' after expression.");
-    return expr;
-  }
-
-  throw ParseError("Expected expression.", peek().line);
-}
-
-std::unique_ptr<Expr> Parser::factor()
-{
-  std::unique_ptr<Expr> expr = unary();
-
-  while (match(TokenType::SLASH, TokenType::STAR, TokenType::PERCENT))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = unary();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::or_()
-{
-  std::unique_ptr<Expr> expr = and_();
-  while (match(TokenType::OR))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = and_();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::and_()
-{
-  std::unique_ptr<Expr> expr = equality();
-  while (match(TokenType::AND))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = equality();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::equality()
-{
-  std::unique_ptr<Expr> expr = comparison();
-  while (match(TokenType::EQUAL_EQUAL, TokenType::TILDE_EQUAL))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = comparison();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::comparison()
-{
-  std::unique_ptr<Expr> expr = term();
-  while (
-      match(TokenType::LESS, TokenType::GREATER, TokenType::LESS_EQUAL, TokenType::GREATER_EQUAL))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = term();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::term()
-{
-  std::unique_ptr<Expr> expr = factor();
-
-  while (match(TokenType::MINUS, TokenType::PLUS))
-  {
-    Token oper = previous();
-    std::unique_ptr<Expr> right = factor();
-    expr = std::make_unique<BinaryExpr>(std::move(expr), std::move(oper), std::move(right));
-  }
-  return expr;
-}
-
-std::vector<std::unique_ptr<Stmt>> Parser::block()
-{
-  std::vector<std::unique_ptr<Stmt>> stmts;
-  while (!done() && !check(TokenType::END) && !check(TokenType::ELSE) &&
-         !check(TokenType::ELSEIF) && !check(TokenType::UNTIL))
-  {
-    stmts.push_back(declaration());
-  }
-  return stmts;
-}
-
-std::unique_ptr<Expr> Parser::call()
-{
-  std::unique_ptr<Expr> expr = primary();
-  for (;;)
-  {
-    if (match(TokenType::LEFT_PAREN))
-    {
-      expr = finishCall(std::move(expr));
-    }
-    else if (match(TokenType::DOT))
-    {
-      Token name = consume(TokenType::IDENTIFIER, "Exprect propery name after '.'");
-      // todo implement later
-    }
-    else
-    {
-      break;
-    }
-  }
-  return expr;
-}
-
-std::unique_ptr<Expr> Parser::finishCall(std::unique_ptr<Expr> callee)
-{
-  std::vector<std::unique_ptr<Expr>> args;
-  if (!check(TokenType::RIGHT_PAREN))
-  {
-    do
-    {
-      if (args.size() >= 255)
-      {
-        throw std::runtime_error("Can't have more than 255 args");
-      }
-      args.push_back(expression());
-    } while (match(TokenType::COMMA));
-  }
-  Token paren = consume(TokenType::RIGHT_PAREN, "Expect ')' after arugments");
-  return std::make_unique<CallExpr>(std::move(callee), std::move(paren), std::move(args));
 }

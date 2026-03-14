@@ -4,10 +4,13 @@
 #include "tokens/Token.hpp"
 #include <memory>
 
-class ReturnStmt : public Stmt {
+class ReturnStmt : public Stmt
+{
 public:
-    Token keyword;
-    std::unique_ptr<Expr> value;
-    ReturnStmt(Token keyword, std::unique_ptr<Expr> value)
-        : keyword(std::move(keyword)), value(std::move(value)) {}
+  Token keyword;
+  std::unique_ptr<Expr> value;
+  ReturnStmt(Token keyword, std::unique_ptr<Expr> value)
+      : keyword(std::move(keyword)), value(std::move(value))
+  {
+  }
 };

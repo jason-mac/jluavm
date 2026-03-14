@@ -1,6 +1,7 @@
 #pragma once
 
-class Stmt {
+class Stmt
+{
 public:
   virtual ~Stmt() = default;
 };

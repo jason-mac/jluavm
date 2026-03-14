@@ -11,7 +11,7 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"nil", TokenType::NIL},       {"not", TokenType::NOT},       {"or", TokenType::OR},
     {"repeat", TokenType::REPEAT}, {"return", TokenType::RETURN}, {"then", TokenType::THEN},
     {"true", TokenType::TRUE},     {"until", TokenType::UNTIL},   {"while", TokenType::WHILE},
-};
+    {"repeat", TokenType::REPEAT}};
 
 std::vector<Token> Lexer::scanTokens()
 {
