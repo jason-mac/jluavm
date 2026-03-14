@@ -3,16 +3,21 @@
 #include "expressions/Expr.hpp"
 #include <memory>
 
-class IfStmt : public Stmt {
+class IfStmt : public Stmt
+{
 public:
-    std::unique_ptr<Expr> condition;
-    std::unique_ptr<Stmt> thenBranch;
-    std::unique_ptr<Stmt> elseBranch;
+  void accept(Visitor* v) override
+  {
+    v->visitIfStmt(this);
+  }
 
-    IfStmt(std::unique_ptr<Expr> cond,
-           std::unique_ptr<Stmt> thenB,
-           std::unique_ptr<Stmt> elseB)
-        : condition(std::move(cond)),
-          thenBranch(std::move(thenB)),
-          elseBranch(std::move(elseB)) {}
+public:
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<Stmt> thenBranch;
+  std::unique_ptr<Stmt> elseBranch;
+
+  IfStmt(std::unique_ptr<Expr> cond, std::unique_ptr<Stmt> thenB, std::unique_ptr<Stmt> elseB)
+      : condition(std::move(cond)), thenBranch(std::move(thenB)), elseBranch(std::move(elseB))
+  {
+  }
 };

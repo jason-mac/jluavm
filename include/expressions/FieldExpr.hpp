@@ -13,4 +13,9 @@ public:
       : object(std::move(object)), field(std::move(field))
   {
   }
+
+  Register accept(Visitor* v) override
+  {
+    return v->visitFieldExpr(this);
+  }
 };

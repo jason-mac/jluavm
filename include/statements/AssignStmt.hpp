@@ -4,10 +4,19 @@
 #include "tokens/Token.hpp"
 #include <memory>
 
-class AssignStmt : public Stmt {
+class AssignStmt : public Stmt
+{
+public:
+  void accept(Visitor* v) override
+  {
+    v->visitAssignStmt(this);
+  }
+
 public:
   Token name;
   std::unique_ptr<Expr> value;
   AssignStmt(Token name, std::unique_ptr<Expr> value)
-      : name(std::move(name)), value(std::move(value)) {}
+      : name(std::move(name)), value(std::move(value))
+  {
+  }
 };

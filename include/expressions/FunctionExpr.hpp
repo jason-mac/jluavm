@@ -16,4 +16,9 @@ public:
       : params(std::move(params)), body(std::move(body))
   {
   }
+
+  Register accept(Visitor* v) override
+  {
+    return v->visitFunctionExpr(this);
+  }
 };

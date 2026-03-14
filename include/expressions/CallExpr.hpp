@@ -4,12 +4,20 @@
 #include <memory>
 #include <vector>
 
-class CallExpr : public Expr {
+class CallExpr : public Expr
+{
 public:
-    std::unique_ptr<Expr> callee;
-    Token paren;
-    std::vector<std::unique_ptr<Expr>> arguments;
+  std::unique_ptr<Expr> callee;
+  Token paren;
+  std::vector<std::unique_ptr<Expr>> arguments;
 
-    CallExpr(std::unique_ptr<Expr> callee, Token paren, std::vector<std::unique_ptr<Expr>> arguments)
-        : callee(std::move(callee)), paren(std::move(paren)), arguments(std::move(arguments)) {}
+  CallExpr(std::unique_ptr<Expr> callee, Token paren, std::vector<std::unique_ptr<Expr>> arguments)
+      : callee(std::move(callee)), paren(std::move(paren)), arguments(std::move(arguments))
+  {
+  }
+
+  Register accept(Visitor* v) override
+  {
+    return v->visitCallExpr(this);
+  }
 };

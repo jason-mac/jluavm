@@ -8,6 +8,12 @@
 class ForEachStmt : public Stmt
 {
 public:
+  void accept(Visitor* v) override
+  {
+    v->visitForEachStmt(this);
+  }
+
+public:
   std::vector<Token> names;
   std::vector<std::unique_ptr<Expr>> explist;
   std::unique_ptr<Stmt> body;

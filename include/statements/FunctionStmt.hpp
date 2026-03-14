@@ -7,6 +7,12 @@
 class FunctionStmt : public Stmt
 {
 public:
+  void accept(Visitor* v) override
+  {
+    v->visitFunctionStmt(this);
+  }
+
+public:
   Token name;
   std::unique_ptr<FunctionExpr> function;
 

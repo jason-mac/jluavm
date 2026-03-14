@@ -6,6 +6,13 @@
 
 class ReturnStmt : public Stmt
 {
+
+public:
+  void accept(Visitor* v) override
+  {
+    v->visitReturnStmt(this);
+  }
+
 public:
   Token keyword;
   std::unique_ptr<Expr> value;

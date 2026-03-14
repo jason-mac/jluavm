@@ -7,6 +7,12 @@
 class ForRangeStmt : public Stmt
 {
 public:
+  void accept(Visitor* v) override
+  {
+    v->visitForRangeStmt(this);
+  }
+
+public:
   Token name;
   std::unique_ptr<Expr> start;
   std::unique_ptr<Expr> stop;

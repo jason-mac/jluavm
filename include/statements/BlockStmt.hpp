@@ -3,9 +3,16 @@
 #include <memory>
 #include <vector>
 
-class BlockStmt : public Stmt {
+class BlockStmt : public Stmt
+{
+
+public:
+  void accept(Visitor* v) override
+  {
+    v->visitBreakStmt(this);
+  }
+
 public:
   std::vector<std::unique_ptr<Stmt>> statements;
-  BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts)
-      : statements(std::move(stmts)) {}
+  BlockStmt(std::vector<std::unique_ptr<Stmt>> stmts) : statements(std::move(stmts)) {}
 };

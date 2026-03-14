@@ -12,4 +12,9 @@ public:
       : object(std::move(object)), index(std::move(index))
   {
   }
+
+  Register accept(Visitor* v) override
+  {
+    return v->visitIndexExpr(this);
+  }
 };

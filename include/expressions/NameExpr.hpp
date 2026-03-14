@@ -2,8 +2,14 @@
 #include "Expr.hpp"
 #include "tokens/Token.hpp"
 
-class NameExpr : public Expr {
+class NameExpr : public Expr
+{
 public:
-    Token name;
-    NameExpr(Token name) : name(std::move(name)) {}
+  Token name;
+  NameExpr(Token name) : name(std::move(name)) {}
+
+  Register accept(Visitor* v) override
+  {
+    return v->visitNameExpr(this);
+  }
 };

@@ -3,11 +3,18 @@
 #include "tokens/Token.hpp"
 #include <memory>
 
-class BinaryExpr : public Expr {
+class BinaryExpr : public Expr
+{
 public:
-    std::unique_ptr<Expr> left;
-    Token op;
-    std::unique_ptr<Expr> right;
-    BinaryExpr(std::unique_ptr<Expr> l, Token o, std::unique_ptr<Expr> r)
-        : left(std::move(l)), op(std::move(o)), right(std::move(r)) {}
+  std::unique_ptr<Expr> left;
+  Token op;
+  std::unique_ptr<Expr> right;
+  BinaryExpr(std::unique_ptr<Expr> l, Token o, std::unique_ptr<Expr> r)
+      : left(std::move(l)), op(std::move(o)), right(std::move(r))
+  {
+  }
+  Register accept(Visitor* v) override
+  {
+    return v->visitBinaryExpr(this);
+  }
 };

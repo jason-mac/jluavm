@@ -7,6 +7,12 @@
 class LocalStmt : public Stmt
 {
 public:
+  void accept(Visitor* v) override
+  {
+    v->visitLocalStmt(this);
+  }
+
+public:
   Token name;
   std::unique_ptr<Expr> value;
 

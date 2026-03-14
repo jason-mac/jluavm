@@ -5,6 +5,13 @@
 
 class RepeatStmt : public Stmt
 {
+
+public:
+  void accept(Visitor* v) override
+  {
+    v->visitRepeatStmt(this);
+  }
+
 public:
   std::unique_ptr<Stmt> body;
   std::unique_ptr<Expr> condition;

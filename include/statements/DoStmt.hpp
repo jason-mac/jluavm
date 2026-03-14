@@ -4,6 +4,13 @@
 
 class DoStmt : public Stmt
 {
+
+public:
+  void accept(Visitor* v) override
+  {
+    v->visitDoStmt(this);
+  }
+
 public:
   std::unique_ptr<Stmt> body;
 

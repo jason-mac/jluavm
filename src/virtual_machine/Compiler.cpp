@@ -6,48 +6,58 @@
 #include "statements/LocalStmt.hpp"
 #include <stdexcept>
 
-static Value literalToValue(const Literal& lit)
-{
-  if (std::holds_alternative<double>(lit)) return std::get<double>(lit);
-  if (std::holds_alternative<std::string>(lit)) return std::get<std::string>(lit);
-  if (std::holds_alternative<bool>(lit)) return std::get<bool>(lit);
-  return NilValue{};
-}
-
 Chunk Compiler::compile(const std::vector<std::unique_ptr<Stmt>>& stmts)
 {
-  locals.reserve(256);
   for (const auto& stmt : stmts)
   {
-    compileStmt(stmt.get());
+    stmt->accept(this);
   }
   return chunk;
 }
 
-void Compiler::compileStmt(const Stmt* stmt)
-{
-  if (auto* s = dynamic_cast<const LocalStmt*>(stmt))
-  {
-    compileLocalStmt(s);
-    return;
-  }
+void Compiler::visitLocalStmt(const LocalStmt* stmt) {}
+void Compiler::visitAssignStmt(const AssignStmt* stmt) {}
+void Compiler::visitIfStmt(const IfStmt* stmt) {}
+void Compiler::visitWhileStmt(const WhileStmt* stmt) {}
+void Compiler::visitRepeatStmt(const RepeatStmt* stmt) {}
+void Compiler::visitDoStmt(const DoStmt* stmt) {}
+void Compiler::visitForRangeStmt(const ForRangeStmt* stmt) {}
+void Compiler::visitForEachStmt(const ForEachStmt* stmt) {}
+void Compiler::visitFunctionStmt(const FunctionStmt* stmt) {}
+void Compiler::visitReturnStmt(const ReturnStmt* stmt) {}
+void Compiler::visitBreakStmt(const BreakStmt* stmt) {}
+void Compiler::visitBlockStmt(const BlockStmt* stmt) {}
+void Compiler::visitExpressionStmt(const ExpressionStmt* stmt) {}
 
-  if (auto* s = dynamic_cast<const AssignStmt*>(stmt))
-  {
-    compileAssignStmt(s);
-    return;
-  }
-  throw std::runtime_error("Unknown statement type");
+Register Compiler::visitLiteralExpr(const LiteralExpr* expr)
+{
+  return 0;
 }
-
-void compileAssignStmt(const AssignStmt* stmt)
+Register Compiler::visitBinaryExpr(const BinaryExpr* expr)
 {
-  // TODO: IMPLEMENT
-  return;
+  return 0;
 }
-
-void Compiler::compileLocalStmt(const LocalStmt* stmt)
+Register Compiler::visitUnaryExpr(const UnaryExpr* expr)
 {
-  // TODO: IMPLEMENT
-  return;
+  return 0;
+}
+Register Compiler::visitNameExpr(const NameExpr* expr)
+{
+  return 0;
+}
+Register Compiler::visitCallExpr(const CallExpr* expr)
+{
+  return 0;
+}
+Register Compiler::visitFunctionExpr(const FunctionExpr* expr)
+{
+  return 0;
+}
+Register Compiler::visitFieldExpr(const FieldExpr* expr)
+{
+  return 0;
+}
+Register Compiler::visitIndexExpr(const IndexExpr* expr)
+{
+  return 0;
 }
