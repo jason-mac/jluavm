@@ -91,6 +91,7 @@ private:
   void visitBreakStmt(const BreakStmt* stmt) override;
   void visitBlockStmt(const BlockStmt* stmt) override;
   void visitExpressionStmt(const ExpressionStmt* stmt) override;
+  void visitLocalFunctionStmt(const LocalFunctionStmt* stmt) override;
 
   // expressions
   void visitLiteralExpr(const LiteralExpr* expr) override;

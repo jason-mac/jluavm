@@ -1,6 +1,7 @@
 #pragma once
 
 class LocalStmt;
+class LocalFunctionStmt;
 class AssignStmt;
 class IfStmt;
 class WhileStmt;
@@ -29,6 +30,7 @@ public:
   virtual ~Visitor() = default;
 
   // statements
+  virtual void visitLocalFunctionStmt(const LocalFunctionStmt* stmt) = 0;
   virtual void visitLocalStmt(const LocalStmt* stmt) = 0;
   virtual void visitAssignStmt(const AssignStmt* stmt) = 0;
   virtual void visitIfStmt(const IfStmt* stmt) = 0;

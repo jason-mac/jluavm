@@ -4,6 +4,7 @@
 #include "expressions/LiteralExpr.hpp"
 #include "expressions/NameExpr.hpp"
 #include "statements/AssignStmt.hpp"
+#include "statements/LocalFunctionStmt.hpp"
 #include "statements/LocalStmt.hpp"
 #include "virtual_machine/OpCode.hpp"
 #include <iostream>
@@ -48,11 +49,22 @@ void Compiler::emitByte(Byte byte)
 void Compiler::visitLiteralExpr(const LiteralExpr* expr)
 {
   Value value;
-  if (std::holds_alternative<double>(expr->value)) value = std::get<double>(expr->value);
+  if (std::holds_alternative<double>(expr->value))
+  {
+    value = std::get<double>(expr->value);
+  }
   else if (std::holds_alternative<std::string>(expr->value))
+  {
     value = std::get<std::string>(expr->value);
-  else if (std::holds_alternative<bool>(expr->value)) value = std::get<bool>(expr->value);
-  else value = NilValue{};
+  }
+  else if (std::holds_alternative<bool>(expr->value))
+  {
+    value = std::get<bool>(expr->value);
+  }
+  else
+  {
+    value = NilValue{};
+  }
   emitBytes((Byte)OpCode::LOAD_CONST, makeConstant(value));
 }
 
@@ -175,15 +187,24 @@ void Compiler::addLocal(const std::string& name)
   locals.push_back({name, -1});
 }
 
+void Compiler::visitLocalFunctionStmt(const LocalFunctionStmt* stmt)
+{
+  addLocal(stmt->name.lexeme);
+  markInitialized();
+
+  stmt->function->accept(this);
+}
+
 int Compiler::resolveLocal(const std::string& name)
 {
-  for (int i = this->locals.size() - 1; i >= 0; i--)
+  for (int i = (int)this->locals.size() - 1; i >= 0; i--)
   {
     Local* local = &this->locals[i];
     if (name == local->name)
     {
       if (local->depth == -1)
       {
+        std::cout << "initializer error for: " << name << std::endl;
         throw CompileError("Can't read local variables in its own initializer");
       }
       return i;
@@ -194,12 +215,12 @@ int Compiler::resolveLocal(const std::string& name)
 
 void Compiler::markInitialized()
 {
-  if (this->scopeDepth == 0) return;
   this->locals.back().depth = this->scopeDepth;
 }
 
 void Compiler::visitLocalStmt(const LocalStmt* stmt)
 {
+
   addLocal(stmt->name.lexeme);
   if (stmt->value)
   {
@@ -289,6 +310,7 @@ void Compiler::visitForRangeStmt(const ForRangeStmt* stmt)
 
   endScope();
 }
+
 void Compiler::visitForEachStmt(const ForEachStmt* stmt) {}
 void Compiler::visitFunctionStmt(const FunctionStmt* stmt)
 {
@@ -369,16 +391,21 @@ void Compiler::visitFunctionExpr(const FunctionExpr* expr)
 {
   Compiler fnCompiler(FunctionType::FUNCTION, "", this);
   fnCompiler.beginScope();
+
   for (auto& param : expr->params)
   {
     fnCompiler.addLocal(param.lexeme);
     fnCompiler.markInitialized();
     fnCompiler.function->arity++;
   }
+
   expr->body->accept(&fnCompiler);
+
   fnCompiler.emitByte((Byte)OpCode::LOAD_NIL);
   fnCompiler.emitByte((Byte)OpCode::RETURN);
+
   ObjectFunction* fn = fnCompiler.function;
+
   emitBytes((Byte)OpCode::LOAD_CONST, makeConstant(fn));
 }
 

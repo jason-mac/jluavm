@@ -16,6 +16,7 @@
 #include "statements/ForRangeStmt.hpp"
 #include "statements/FunctionStmt.hpp"
 #include "statements/IfStmt.hpp"
+#include "statements/LocalFunctionStmt.hpp"
 #include "statements/LocalStmt.hpp"
 #include "statements/RepeatStmt.hpp"
 #include "statements/ReturnStmt.hpp"
@@ -203,7 +204,7 @@ std::unique_ptr<Stmt> Parser::localFunctionStatement()
   Token name = consume(TokenType::IDENTIFIER, "Expected function name after declaration");
   FuncBody body = parseFuncBody();
   auto func = std::make_unique<FunctionExpr>(std::move(body.params), std::move(body.body));
-  return std::make_unique<LocalStmt>(std::move(name), std::move(func));
+  return std::make_unique<LocalFunctionStmt>(std::move(name), std::move(func));
 }
 
 std::unique_ptr<Stmt> Parser::localStatement()

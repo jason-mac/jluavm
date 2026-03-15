@@ -57,7 +57,7 @@ uint16_t VM::readShort(CallFrame* frame)
   uint16_t high = frame->ip[0];
   uint16_t low = frame->ip[1];
   frame->ip += 2;
-  return (int16_t)((high << 8) | low);
+  return (uint16_t)((high << 8) | low);
 }
 
 Value VM::readConstant(CallFrame* frame)
@@ -203,7 +203,7 @@ InterpretResult VM::run()
       }
       case OpCode::GET_LOCAL:
       {
-        int8_t slot = readByte(frame);
+        uint8_t slot = readByte(frame);
         push(frame->slots[slot]);
         break;
       }
