@@ -146,22 +146,23 @@ void Compiler::patchJump(int16_t jumpPos)
 void Compiler::visitIfStmt(const IfStmt* stmt)
 {
   stmt->condition->accept(this);
-  int16_t jumpPos = emitJump(OpCode::JMP_IF_FALSE);
-  emitByte((Byte)OpCode::POP);
+
+  int16_t thenJump = emitJump(OpCode::JMP_IF_FALSE);
+  emitByte((Byte)OpCode::POP); // true path: pop condition
+
   stmt->thenBranch->accept(this);
+
+  int16_t endJump = emitJump(OpCode::JMP); // always skip false-path pop
+
+  patchJump(thenJump);
+  emitByte((Byte)OpCode::POP); // false path: pop condition
+
   if (stmt->elseBranch)
   {
-    int16_t elseJumpPos = emitJump(OpCode::JMP);
-    patchJump(jumpPos);
-    emitByte((Byte)OpCode::POP);
     stmt->elseBranch->accept(this);
-    patchJump(elseJumpPos);
   }
-  else
-  {
-    patchJump(jumpPos);
-    emitByte((Byte)OpCode::POP);
-  }
+
+  patchJump(endJump);
 }
 
 void Compiler::emitLoop(int loopStart)
@@ -312,6 +313,7 @@ void Compiler::visitForRangeStmt(const ForRangeStmt* stmt)
 }
 
 void Compiler::visitForEachStmt(const ForEachStmt* stmt) {}
+
 void Compiler::visitFunctionStmt(const FunctionStmt* stmt)
 {
   Compiler fnCompiler(FunctionType::FUNCTION, stmt->name.lexeme, this);

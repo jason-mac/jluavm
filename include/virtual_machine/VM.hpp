@@ -56,7 +56,7 @@ private:
   InterpretResult run();
   void resetStack();
   Byte readByte(CallFrame*);
-  uint16_t readShort(CallFrame*);
+  int16_t readShort(CallFrame*);
   Value readConstant(CallFrame*);
   std::string readString(CallFrame*);
   void binaryOp(Operator oper);

@@ -52,12 +52,12 @@ Byte VM::readByte(CallFrame* frame)
   return *frame->ip++;
 }
 
-uint16_t VM::readShort(CallFrame* frame)
+int16_t VM::readShort(CallFrame* frame)
 {
-  uint16_t high = frame->ip[0];
-  uint16_t low = frame->ip[1];
+  int16_t high = frame->ip[0];
+  int16_t low = frame->ip[1];
   frame->ip += 2;
-  return (uint16_t)((high << 8) | low);
+  return (int16_t)((high << 8) | low);
 }
 
 Value VM::readConstant(CallFrame* frame)
